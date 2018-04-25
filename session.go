@@ -279,6 +279,7 @@ func ParseURL(url string) (*DialInfo, error) {
 	source := ""
 	setName := ""
 	poolLimit := 0
+	ssl := false
 	for k, v := range uinfo.options {
 		switch k {
 		case "authSource":
@@ -293,6 +294,10 @@ func ParseURL(url string) (*DialInfo, error) {
 			poolLimit, err = strconv.Atoi(v)
 			if err != nil {
 				return nil, errors.New("bad value for maxPoolSize: " + v)
+			}
+		case "ssl":
+			if v == "true" {
+				ssl = true
 			}
 		case "connect":
 			if v == "direct" {
@@ -318,6 +323,7 @@ func ParseURL(url string) (*DialInfo, error) {
 		Source:         source,
 		PoolLimit:      poolLimit,
 		ReplicaSetName: setName,
+		SSL:            ssl,
 	}
 	return &info, nil
 }
@@ -390,6 +396,9 @@ type DialInfo struct {
 
 	// WARNING: This field is obsolete. See DialServer above.
 	Dial func(addr net.Addr) (net.Conn, error)
+
+	// for encrypted connection
+	SSL bool
 }
 
 // mgo.v3: Drop DialInfo.Dial.
@@ -422,7 +431,8 @@ func DialWithInfo(info *DialInfo) (*Session, error) {
 		}
 		addrs[i] = addr
 	}
-	cluster := newCluster(addrs, info.Direct, info.FailFast, dialer{info.Dial, info.DialServer}, info.ReplicaSetName)
+
+	cluster := newCluster(addrs, info.Direct, info.FailFast, dialer{info.Dial, info.DialServer}, info.ReplicaSetName, info.SSL)
 	session := newSession(Eventual, cluster, info.Timeout)
 	session.defaultdb = info.Database
 	if session.defaultdb == "" {

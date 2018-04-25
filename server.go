@@ -27,6 +27,7 @@
 package mgo
 
 import (
+	"crypto/tls"
 	"errors"
 	"net"
 	"sort"
@@ -55,6 +56,7 @@ type mongoServer struct {
 	pingCount     uint32
 	pingWindow    [6]time.Duration
 	info          *mongoServerInfo
+	SSL           bool
 }
 
 type dialer struct {
@@ -76,7 +78,7 @@ type mongoServerInfo struct {
 
 var defaultServerInfo mongoServerInfo
 
-func newServer(addr string, tcpaddr *net.TCPAddr, sync chan bool, dial dialer) *mongoServer {
+func newServer(addr string, tcpaddr *net.TCPAddr, sync chan bool, dial dialer, ssl bool) *mongoServer {
 	server := &mongoServer{
 		Addr:         addr,
 		ResolvedAddr: tcpaddr.String(),
@@ -85,6 +87,7 @@ func newServer(addr string, tcpaddr *net.TCPAddr, sync chan bool, dial dialer) *
 		dial:         dial,
 		info:         &defaultServerInfo,
 		pingValue:    time.Hour, // Push it back before an actual ping.
+		SSL:          ssl,
 	}
 	go server.pinger(true)
 	return server
@@ -161,11 +164,17 @@ func (server *mongoServer) Connect(timeout time.Duration) (*mongoSocket, error) 
 	case !dial.isSet():
 		// Cannot do this because it lacks timeout support. :-(
 		//conn, err = net.DialTCP("tcp", nil, server.tcpaddr)
-		conn, err = net.DialTimeout("tcp", server.ResolvedAddr, timeout)
-		if tcpconn, ok := conn.(*net.TCPConn); ok {
-			tcpconn.SetKeepAlive(true)
-		} else if err == nil {
-			panic("internal error: obtained TCP connection is not a *net.TCPConn!?")
+		if server.SSL {
+			tlsConfig := &tls.Config{}
+			tlsConfig.InsecureSkipVerify = true
+			conn, err = tls.Dial("tcp", server.Addr, tlsConfig)
+		} else {
+			conn, err = net.DialTimeout("tcp", server.ResolvedAddr, timeout)
+			if tcpconn, ok := conn.(*net.TCPConn); ok {
+				tcpconn.SetKeepAlive(true)
+			} else if err == nil {
+				panic("internal error: obtained TCP connection is not a *net.TCPConn!?")
+			}
 		}
 	case dial.old != nil:
 		conn, err = dial.old(server.tcpaddr)
