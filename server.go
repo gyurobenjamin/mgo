@@ -165,9 +165,17 @@ func (server *mongoServer) Connect(timeout time.Duration) (*mongoSocket, error) 
 		// Cannot do this because it lacks timeout support. :-(
 		//conn, err = net.DialTCP("tcp", nil, server.tcpaddr)
 		if server.SSL {
-			tlsConfig := &tls.Config{}
-			tlsConfig.InsecureSkipVerify = true
-			conn, err = tls.Dial("tcp", server.Addr, tlsConfig)
+			// Cannot use dial because of keepalive
+			// tls.Dial("tcp", server.Addr, tlsConfig)
+			conn, err = tls.DialWithDialer(
+				&net.Dialer{
+					Timeout:   time.Second * 2,
+					KeepAlive: time.Minute * 5,
+				},
+				"tcp",
+				server.Addr,
+				&tls.Config{},
+			)
 		} else {
 			conn, err = net.DialTimeout("tcp", server.ResolvedAddr, timeout)
 			if tcpconn, ok := conn.(*net.TCPConn); ok {
