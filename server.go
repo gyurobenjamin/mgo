@@ -169,13 +169,16 @@ func (server *mongoServer) Connect(timeout time.Duration) (*mongoSocket, error) 
 			// tls.Dial("tcp", server.Addr, tlsConfig)
 			conn, err = tls.DialWithDialer(
 				&net.Dialer{
-					// Timeout:   time.Second * 2,
+					Timeout:   timeout,
 					KeepAlive: time.Minute,
 				},
 				"tcp",
 				server.Addr,
 				&tls.Config{},
 			)
+			if err != nil {
+				panic("internal error: obtained TLS connection")
+			}
 		} else {
 			conn, err = net.DialTimeout("tcp", server.ResolvedAddr, timeout)
 			if tcpconn, ok := conn.(*net.TCPConn); ok {
